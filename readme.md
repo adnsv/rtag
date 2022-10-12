@@ -175,3 +175,13 @@ To https://github.com/adnsv/go-utils
 
 mission accomplished
 ```
+
+## License
+
+The rtag utility is licenced under the MIT license 
+
+Other libraries used:
+- https://github.com/jawher/mow.cli
+- https://github.com/blang/semver
+- https://github.com/josephspurrier/goversioninfo
+
