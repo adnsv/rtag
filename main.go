@@ -24,12 +24,6 @@ func main() {
 	opts.bind_cli(app)
 
 	app.Action = func() {
-
-		if version {
-			show_app_version()
-			return
-		}
-
 		termstate := configure_output(os.Stdout)
 		defer termstate.Restore()
 
