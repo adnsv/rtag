@@ -1,5 +1,5 @@
-github.com/adnsv/go-utils v0.6.0 h1:VIifjphKAAZKNTnb7j9FLzDWlW/ehq96nBIs9nd7mhI=
-github.com/adnsv/go-utils v0.6.0/go.mod h1:TYfA/m6fXAvxMkOqbdqojDmGJ9FOx47ey3aar0Aqc9U=
+github.com/adnsv/go-utils v0.7.0 h1:tlX0pBCWI2zH/1o/MulrRCz9LlyXZT6sZXg6YZrWx5Q=
+github.com/adnsv/go-utils v0.7.0/go.mod h1:TYfA/m6fXAvxMkOqbdqojDmGJ9FOx47ey3aar0Aqc9U=
 github.com/akavel/rsrc v0.10.2 h1:Zxm8V5eI1hW4gGaYsJQUhxpjkENuG91ki8B4zCrvEsw=
 github.com/akavel/rsrc v0.10.2/go.mod h1:uLoCtb9J+EyAqh+26kdrTgmzRBFPGOolLWKpdxkKq+c=
 github.com/blang/semver/v4 v4.0.0 h1:1PFHFE6yCCTv8C1TeyNNarDzntLi7wMI5i/pzqYIsAM=

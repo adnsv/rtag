@@ -3,7 +3,7 @@ module github.com/adnsv/rtag
 go 1.19
 
 require (
-	github.com/adnsv/go-utils v0.6.0
+	github.com/adnsv/go-utils v0.7.0
 	github.com/blang/semver/v4 v4.0.0
 	github.com/jawher/mow.cli v1.2.0
 )
