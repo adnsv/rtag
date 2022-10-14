@@ -181,7 +181,8 @@ mission accomplished
 The rtag utility is licenced under the MIT license 
 
 Other libraries used:
+- https://github.com/adnsv/go-utils
 - https://github.com/jawher/mow.cli
 - https://github.com/blang/semver
 - https://github.com/josephspurrier/goversioninfo
-
+- https://github.com/wangyoucao577/go-release-action
