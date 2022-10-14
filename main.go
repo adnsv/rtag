@@ -11,15 +11,15 @@ import (
 var errUserCancelled = errors.New("exiting")
 
 func main() {
-	undo := false
-	version := false
-	opts := exec_options{}
-
 	app := cli.App("rtag", "rtag is a git tag management utility that helps making consistent release tags")
 
-	app.Spec = "[--version] [--undo] [--prefix=<ver-prefix>] [--allow-dirty]"
+	app.Version("version", app_version())
 
-	app.BoolOptPtr(&version, "v version", false, "show app version")
+	app.Spec = "[--undo] [--prefix=<ver-prefix>] [--allow-dirty]"
+
+	undo := false
+	opts := exec_options{}
+
 	app.BoolOptPtr(&undo, "u undo", false, "undo last tag locally and remotely")
 	opts.bind_cli(app)
 
