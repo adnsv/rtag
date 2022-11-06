@@ -173,7 +173,7 @@ func create_first_tag(opts *exec_options) error {
 	if opts.prefix == "AUTO" {
 		opts.prefix = "v"
 	}
-	tag := opts.prefix + "0.0.1"
+	tag := opts.prefix + "0.1.0"
 	comment := generate_tag_comment(tag)
 
 	fmt.Println()
@@ -183,6 +183,7 @@ func create_first_tag(opts *exec_options) error {
 	fmt.Println("or cancel and assign it manually:")
 	fmt.Println()
 	fmt.Printf("    git tag -a %s -m \"%s\"\n", tag, comment)
+	fmt.Printf("    git push origin %s\n", tag)
 	fmt.Println()
 
 	return perform_tagging(tag, comment)
