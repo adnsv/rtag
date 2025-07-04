@@ -10,6 +10,9 @@ import (
 	"github.com/adnsv/go-utils/git"
 	"github.com/adnsv/go-utils/prompt"
 	"github.com/adnsv/go-utils/version"
+	gitpkg "github.com/adnsv/rtag/internal/git"
+	"github.com/adnsv/rtag/internal/ui"
+	verpkg "github.com/adnsv/rtag/internal/version"
 	cli "github.com/jawher/mow.cli"
 )
 
@@ -32,7 +35,7 @@ func (opts *exec_options) bind_cli(cli *cli.Cli) {
 var errDirtyRepo = errors.New("the repository has uncommited changes")
 
 func execute(opts *exec_options) error {
-	wd, stats, err := get_stats()
+	wd, stats, err := gitpkg.GetStats()
 
 	if err == git.ErrNoTags {
 		return create_first_tag(opts)
@@ -43,25 +46,25 @@ func execute(opts *exec_options) error {
 	oldtag := stats.Description.Tag
 	vi, err := git.ParseVersion(stats.Description)
 	if stats.Dirty {
-		print_keyval("last tag", oldtag)
+		ui.PrintKeyval("last tag", oldtag)
 		if stats.Description.AdditionalCommits > 0 {
-			print_keyval("additional commits", stats.Description.AdditionalCommits)
+			ui.PrintKeyval("additional commits", stats.Description.AdditionalCommits)
 		}
 
 		if !opts.allow_dirty {
 			fmt.Println()
-			fmt.Println(fmt_bold("WARNING") + ": modified since the last commit")
+			fmt.Println(ui.FmtBold("WARNING") + ": modified since the last commit")
 			fmt.Println("         (execute 'git status' for mode detail)")
 			fmt.Println()
 			fmt.Println("Commit your changes before updating the tag")
-			print_dim("or re-run with --allow-dirty to force tagging in dirty state")
+			ui.PrintDim("or re-run with --allow-dirty to force tagging in dirty state")
 			fmt.Println()
 			return errDirtyRepo
 		} else {
-			print_keyval("state", fmt_bold("dirty")+", has uncommited changes")
+			ui.PrintKeyval("state", ui.FmtBold("dirty")+", has uncommited changes")
 		}
 	} else {
-		print_keyval("state", "clean, no uncommited changes")
+		ui.PrintKeyval("state", "clean, no uncommited changes")
 	}
 
 	if !opts.with_quad && err == version.ErrNumberOfAdditionalCommitsIsTooLarge {
@@ -73,7 +76,7 @@ func execute(opts *exec_options) error {
 		if err != nil {
 			return err
 		}
-		print_keyval("last semantic tag", oldtag)
+		ui.PrintKeyval("last semantic tag", oldtag)
 	}
 
 	if opts.prefix == "AUTO" {
@@ -88,26 +91,26 @@ func execute(opts *exec_options) error {
 		}
 
 		if opts.prefix == "" {
-			print_keyval("auto prefix", "no")
+			ui.PrintKeyval("auto prefix", "no")
 		} else {
-			print_keyval("auto prefix", opts.prefix)
+			ui.PrintKeyval("auto prefix", opts.prefix)
 		}
 	}
 
 	stats.Description.Tag = strings.TrimPrefix(stats.Description.Tag, opts.prefix)
 
 	if stats.Description.AdditionalCommits > 0 {
-		print_keyval("additional commits", stats.Description.AdditionalCommits)
+		ui.PrintKeyval("additional commits", stats.Description.AdditionalCommits)
 	}
 
-	print_keyval("semantic ver", vi.Semantic)
+	ui.PrintKeyval("semantic ver", vi.Semantic)
 	if opts.with_quad {
-		print_keyval("version quad", vi.Quad.String())
+		ui.PrintKeyval("version quad", vi.Quad.String())
 	}
 
 	if stats.Description.AdditionalCommits == 0 {
 		fmt.Println()
-		fmt.Printf("The current state of repository is already tagged as %s.\n", fmt_tag(oldtag))
+		fmt.Printf("The current state of repository is already tagged as %s.\n", ui.FmtTag(oldtag))
 		fmt.Println("If you proceed, you will have more than one tag pointing to the same state.")
 		fmt.Println()
 		if !prompt.YN("Still want to proceed [y/n]?") {
@@ -115,7 +118,7 @@ func execute(opts *exec_options) error {
 		}
 	}
 
-	actions := collectActions(vi.Semantic)
+	actions := verpkg.CollectActions(vi.Semantic)
 	if len(actions) == 0 {
 		fmt.Println("No actions available")
 		return nil
@@ -125,36 +128,36 @@ func execute(opts *exec_options) error {
 
 	choices := make([]string, 0, len(actions))
 	for _, a := range actions {
-		desc := a.desc
+		desc := a.Desc
 		comment := ""
 		if i := strings.IndexByte(desc, '|'); i >= 0 {
-			comment = " " + fmt_dim("("+desc[i+1:]+")")
+			comment = " " + ui.FmtDim("("+desc[i+1:]+")")
 			desc = desc[:i]
 		}
-		if a.showPRchoice {
+		if a.ShowPRChoice {
 			choices = append(choices, fmt.Sprintf("%s %s%s ...",
-				desc, fmt_tag(opts.prefix+a.ver.String()), comment))
+				desc, ui.FmtTag(opts.prefix+a.Ver.String()), comment))
 		} else {
 			choices = append(choices, fmt.Sprintf("%s %s%s",
-				desc, fmt_tag(opts.prefix+a.ver.String()), comment))
+				desc, ui.FmtTag(opts.prefix+a.Ver.String()), comment))
 		}
 	}
 
 	choice := prompt.Choose("available actions:", choices...)
 	action := actions[choice-1]
-	newver := action.ver
+	newver := action.Ver
 
-	if action.showPRchoice {
+	if action.ShowPRChoice {
 		fmt.Println()
 		fmt.Println("Select (pre-)release type")
-		fmt.Printf("- 'alpha'   for %s\n", fmt_tag(opts.prefix+withPR(action.ver, "alpha", 1).String()))
-		fmt.Printf("- 'beta'    for %s\n", fmt_tag(opts.prefix+withPR(action.ver, "beta", 1).String()))
-		fmt.Printf("- 'rc'      for %s\n", fmt_tag(opts.prefix+withPR(action.ver, "rc", 1).String()))
-		fmt.Printf("- 'release' for %s\n", fmt_tag(opts.prefix+withoutPR(action.ver).String()))
+		fmt.Printf("- 'alpha'   for %s\n", ui.FmtTag(opts.prefix+verpkg.WithPR(action.Ver, "alpha", 1).String()))
+		fmt.Printf("- 'beta'    for %s\n", ui.FmtTag(opts.prefix+verpkg.WithPR(action.Ver, "beta", 1).String()))
+		fmt.Printf("- 'rc'      for %s\n", ui.FmtTag(opts.prefix+verpkg.WithPR(action.Ver, "rc", 1).String()))
+		fmt.Printf("- 'release' for %s\n", ui.FmtTag(opts.prefix+verpkg.WithoutPR(action.Ver).String()))
 
 		choice := prompt.Enum("type", "alpha", "beta", "rc", "release")
 		if choice != "release" {
-			newver.Pre = makePR(choice, 1)
+			newver.Pre = verpkg.MakePR(choice, 1)
 		} else {
 			newver.Pre = newver.Pre[:0]
 		}
@@ -177,7 +180,7 @@ func create_first_tag(opts *exec_options) error {
 	comment := generate_tag_comment(tag)
 
 	fmt.Println()
-	fmt.Println(fmt_bold("WARNING") + ": no existing tags found")
+	fmt.Println(ui.FmtBold("WARNING") + ": no existing tags found")
 	fmt.Println()
 	fmt.Println("Proceed to create the first tag with this utility,")
 	fmt.Println("or cancel and assign it manually:")
@@ -190,8 +193,8 @@ func create_first_tag(opts *exec_options) error {
 }
 
 func run_git_tag(tag, comment string) error {
-	begin_dim()
-	defer end_dim()
+	ui.BeginDim()
+	defer ui.EndDim()
 
 	fmt.Printf("executing: 'git tag -a %s -m \"%s\"\n", tag, comment)
 	cmd := exec.Command("git", "tag", "-a", tag, "-m", comment)
@@ -201,8 +204,8 @@ func run_git_tag(tag, comment string) error {
 }
 
 func run_git_push_origin(tag string) error {
-	begin_dim()
-	defer end_dim()
+	ui.BeginDim()
+	defer ui.EndDim()
 
 	fmt.Printf("executing: 'git push origin %s'\n", tag)
 	cmd := exec.Command("git", "push", "origin", tag)
@@ -216,7 +219,7 @@ func perform_tagging(tag, comment string) error {
 	tag_comment := fmt.Sprintf("tagging as %s", tag)
 
 	fmt.Println()
-	fmt.Printf("Ready to tag as %s %s:\n", fmt_tag(tag), fmt_dim("(with comment '"+tag_comment+"')"))
+	fmt.Printf("Ready to tag as %s %s:\n", ui.FmtTag(tag), ui.FmtDim("(with comment '"+tag_comment+"')"))
 	fmt.Println()
 	if !prompt.YN("proceed [y/n]? ") {
 		return errUserCancelled
@@ -229,14 +232,14 @@ func perform_tagging(tag, comment string) error {
 	}
 
 	fmt.Println()
-	fmt.Printf("Your local repository is now tagged as %s\n", fmt_tag(tag))
+	fmt.Printf("Your local repository is now tagged as %s\n", ui.FmtTag(tag))
 	fmt.Println()
 	fmt.Printf("To push this change to remote, execute:\n\n")
 	fmt.Printf("    git push origin %s\n\n", tag)
-	begin_dim()
+	ui.BeginDim()
 	fmt.Println("NOTE: to revert local and/or remote tagging,")
 	fmt.Println("      re-run rtag with --undo")
-	end_dim()
+	ui.EndDim()
 	fmt.Println()
 	fmt.Println("This utility can push the new tag for you")
 	fmt.Println()
@@ -258,7 +261,7 @@ func handle_tag_parse_error(workdir string, last_vi *git.VersionInfo, last_tag s
 	fmt.Printf("tag parse error: %s\n", parse_err)
 	if parse_err == version.ErrNumberOfAdditionalCommitsIsTooLarge {
 
-		fmt.Printf(fmt_bold("WARNING") + `: generation of version quads fails if the number of
+		fmt.Printf(ui.FmtBold("WARNING") + `: generation of version quads fails if the number of
 additional commits exceeds 99.
 
 Please consider bumping up the version to resolve this issue.
@@ -274,7 +277,7 @@ If you choose to proceed, it will be capped to 99 in the generated quad.
 
 	sem_tag, sem_vi, err := git.LastSemanticTag(workdir)
 	if err == nil {
-		fmt.Printf(fmt_bold("WARNING")+": last tag '%s' does not conform to semantic version syntax\n", last_tag)
+		fmt.Printf(ui.FmtBold("WARNING")+": last tag '%s' does not conform to semantic version syntax\n", last_tag)
 		fmt.Printf("however, there is an older tag '%s' that can be used instead\n", sem_tag)
 		fmt.Printf("\n")
 		if prompt.YN("Proceed with '" + sem_tag + "' as base [y/n]?") {
@@ -284,7 +287,7 @@ If you choose to proceed, it will be capped to 99 in the generated quad.
 		}
 	}
 	fmt.Println()
-	fmt.Printf(fmt_bold("ERROR")+": last tag '%s' does not conform to semantic version syntax\n", last_tag)
+	fmt.Printf(ui.FmtBold("ERROR")+": last tag '%s' does not conform to semantic version syntax\n", last_tag)
 	fmt.Println()
 	fmt.Printf("This utility expects your repository to be tagged with semantic tags,\n")
 	fmt.Printf("see https://semver.org for more information\n")

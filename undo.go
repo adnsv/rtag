@@ -6,11 +6,12 @@ import (
 	"os/exec"
 
 	"github.com/adnsv/go-utils/prompt"
+	gitpkg "github.com/adnsv/rtag/internal/git"
 )
 
 func cmd_undo() error {
 
-	_, stats, err := get_stats()
+	_, stats, err := gitpkg.GetStats()
 	if err != nil {
 		return err
 	}

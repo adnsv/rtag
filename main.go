@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/adnsv/rtag/internal/ui"
 	cli "github.com/jawher/mow.cli"
 )
 
@@ -24,7 +25,7 @@ func main() {
 	opts.bind_cli(app)
 
 	app.Action = func() {
-		termstate := configure_output(os.Stdout)
+		termstate := ui.ConfigureOutput(os.Stdout)
 		defer termstate.Restore()
 
 		var err error
