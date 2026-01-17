@@ -90,15 +90,6 @@ from the last tag: `1.0.0` -> `1.1.0`, `v1.0.0` -> `v1.1.0`, `ver_1.0.0` ->
 You can override this behavior by specifying which prefix to use explicitly with
 the `--prefix="<MYPREFIX>"` option.
 
-## Navigation
-
-The TUI uses standard keyboard controls:
-
-- **↑/↓** - Navigate between options
-- **Enter** - Select option
-- **Esc** - Go back to previous screen
-- **q** - Quit
-
 ## License
 
 The rtag utility is licensed under the MIT license.
