@@ -87,6 +87,8 @@ func (m Model) View() string {
 		return m.viewSelectPRType()
 	case StateConfirmTag:
 		return m.viewConfirmTag()
+	case StateEditTagComment:
+		return m.viewEditTagComment()
 	case StateExecutingTag, StateExecutingPush, StateExecutingUndo:
 		return m.viewExecuting()
 	case StateConfirmPush:
@@ -163,7 +165,19 @@ func (m Model) viewConfirmTag() string {
 
 	s.WriteString("\n")
 	s.WriteString(m.confirmList.View())
-	s.WriteString("\n" + helpStyle.Render(m.keys.ConfirmHelp()))
+	s.WriteString("\n" + helpStyle.Render(m.keys.ListHelp()))
+
+	return s.String()
+}
+
+func (m Model) viewEditTagComment() string {
+	var s strings.Builder
+
+	s.WriteString(titleStyle.Render("Edit Tag Comment") + "\n\n")
+	s.WriteString(m.renderKeyValue("tag", tagStyle.Render(m.newTag)))
+	s.WriteString("\nEnter comment:\n\n")
+	s.WriteString(m.textInput.View() + "\n\n")
+	s.WriteString(helpStyle.Render(m.keys.InputHelp()))
 
 	return s.String()
 }

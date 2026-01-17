@@ -22,6 +22,7 @@ const (
 	StateSelectAction
 	StateSelectPRType
 	StateConfirmTag
+	StateEditTagComment
 	StateExecutingTag
 	StateConfirmPush
 	StateExecutingPush

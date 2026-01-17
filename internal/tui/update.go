@@ -51,6 +51,19 @@ func (m *Model) initConfirmList(yesDesc, noDesc string) {
 	m.confirmList.SetShowHelp(false)
 }
 
+func (m *Model) initTagConfirmList() {
+	items := []list.Item{
+		tagConfirmItem{action: "yes", title: "Yes", description: "Create this tag"},
+		tagConfirmItem{action: "edit", title: "Edit comment", description: "Customize the tag message"},
+		tagConfirmItem{action: "no", title: "No", description: "Cancel"},
+	}
+	m.confirmList = list.New(items, newItemDelegate(), m.width-4, min(len(items)*3+4, m.height-10))
+	m.confirmList.SetShowTitle(false)
+	m.confirmList.SetShowStatusBar(false)
+	m.confirmList.SetFilteringEnabled(false)
+	m.confirmList.SetShowHelp(false)
+}
+
 // Update handles all messages and updates the model
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
@@ -96,6 +109,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m.updateSelectPRType(msg)
 	case StateConfirmTag:
 		return m.updateConfirmTag(msg)
+	case StateEditTagComment:
+		return m.updateEditTagComment(msg)
 	case StateExecutingTag:
 		return m.updateExecuting(msg)
 	case StateConfirmPush:
@@ -144,7 +159,7 @@ func (m Model) updateLoading(msg tea.Msg) (Model, tea.Cmd) {
 				}
 				m.newTag = m.prefix + "0.1.0"
 				m.tagComment = generateTagComment(m.newTag)
-				m.initConfirmList("Create this tag", "Cancel")
+				m.initTagConfirmList()
 				m.state = StateConfirmTag
 				return m, nil
 			} else {
@@ -218,7 +233,7 @@ func (m Model) updateLoading(msg tea.Msg) (Model, tea.Cmd) {
 			// First tag scenario (shouldn't happen here, but handle it)
 			m.newTag = m.prefix + "0.1.0"
 			m.tagComment = generateTagComment(m.newTag)
-			m.initConfirmList("Create this tag", "Cancel")
+			m.initTagConfirmList()
 			m.state = StateConfirmTag
 			return m, nil
 		}
@@ -278,7 +293,7 @@ func (m Model) updateSelectAction(msg tea.Msg) (Model, tea.Cmd) {
 					// Direct to confirmation
 					m.newTag = m.prefix + selected.action.Ver.String()
 					m.tagComment = generateTagComment(m.newTag)
-					m.initConfirmList("Create this tag", "Cancel")
+					m.initTagConfirmList()
 					m.state = StateConfirmTag
 				}
 				return m, nil
@@ -312,7 +327,7 @@ func (m Model) updateSelectPRType(msg tea.Msg) (Model, tea.Cmd) {
 					
 					m.newTag = m.prefix + newVer.String()
 					m.tagComment = generateTagComment(m.newTag)
-					m.initConfirmList("Create this tag", "Cancel")
+					m.initTagConfirmList()
 					m.state = StateConfirmTag
 				}
 				return m, nil
@@ -331,20 +346,53 @@ func (m Model) updateConfirmTag(msg tea.Msg) (Model, tea.Cmd) {
 	case tea.KeyMsg:
 		switch msg.String() {
 		case "enter":
-			selected, ok := m.confirmList.SelectedItem().(confirmItem)
+			selected, ok := m.confirmList.SelectedItem().(tagConfirmItem)
 			if ok {
-				if selected.choice {
+				switch selected.action {
+				case "yes":
 					m.state = StateExecutingTag
 					m.lastCommand = fmt.Sprintf("git tag -a %s -m \"%s\"", m.newTag, m.tagComment)
 					return m, gitTag(m.newTag, m.tagComment)
+				case "edit":
+					ti := textinput.New()
+					ti.SetValue(m.tagComment)
+					ti.Focus()
+					ti.CharLimit = 200
+					ti.Width = 60
+					m.textInput = ti
+					m.state = StateEditTagComment
+					return m, textinput.Blink
+				case "no":
+					return m, tea.Quit
 				}
-				return m, tea.Quit
 			}
 		}
 	}
 
 	var cmd tea.Cmd
 	m.confirmList, cmd = m.confirmList.Update(msg)
+	return m, cmd
+}
+
+func (m Model) updateEditTagComment(msg tea.Msg) (Model, tea.Cmd) {
+	var cmd tea.Cmd
+
+	switch msg := msg.(type) {
+	case tea.KeyMsg:
+		switch msg.Type {
+		case tea.KeyEnter:
+			m.tagComment = m.textInput.Value()
+			m.initTagConfirmList()
+			m.state = StateConfirmTag
+			return m, nil
+		case tea.KeyEsc:
+			m.initTagConfirmList()
+			m.state = StateConfirmTag
+			return m, nil
+		}
+	}
+
+	m.textInput, cmd = m.textInput.Update(msg)
 	return m, cmd
 }
 
@@ -435,6 +483,9 @@ func (m Model) handleBack() (Model, tea.Cmd) {
 		} else {
 			m.state = StateSelectAction
 		}
+	case StateEditTagComment:
+		m.initTagConfirmList()
+		m.state = StateConfirmTag
 	case StateConfirmPush:
 		// Can't go back from here - tag already created
 	case StateError:
@@ -489,7 +540,7 @@ func (m Model) updateDirtyRepoChoice(msg tea.Msg) (Model, tea.Cmd) {
 					if len(m.versions) == 0 {
 						m.newTag = m.prefix + "0.1.0"
 						m.tagComment = generateTagComment(m.newTag)
-						m.initConfirmList("Create this tag", "Cancel")
+						m.initTagConfirmList()
 						m.state = StateConfirmTag
 						return m, nil
 					}
@@ -744,3 +795,13 @@ type confirmItem struct {
 func (i confirmItem) Title() string       { return i.title }
 func (i confirmItem) Description() string { return i.description }
 func (i confirmItem) FilterValue() string { return i.title }
+
+type tagConfirmItem struct {
+	action      string // "yes", "edit", "no"
+	title       string
+	description string
+}
+
+func (i tagConfirmItem) Title() string       { return i.title }
+func (i tagConfirmItem) Description() string { return i.description }
+func (i tagConfirmItem) FilterValue() string { return i.action }
