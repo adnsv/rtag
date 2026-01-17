@@ -96,13 +96,14 @@ func (m *Model) initFirstTagActionList() {
 	items := []list.Item{
 		actionItem{
 			action: version.Action{
-				Desc: "v0.1.0|recommended starting version",
+				Desc: "Initial version|recommended starting version",
 				Ver:  semver.Version{Major: 0, Minor: 1, Patch: 0},
 			},
 			prefix: m.prefix,
 		},
 		actionItem{
 			isCustom: true,
+			prefix:   m.prefix,
 		},
 	}
 
