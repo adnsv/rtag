@@ -69,7 +69,7 @@ func (m Model) View() string {
 	if m.width == 0 {
 		return ""
 	}
-	
+
 	switch m.state {
 	case StateLoading:
 		return m.viewLoading()
@@ -97,10 +97,12 @@ func (m Model) View() string {
 		return m.viewDone()
 	case StateError:
 		return m.viewError()
-	case StateUndoSelectScope:
-		return m.viewUndoSelectScope()
+	case StateUndoPreview:
+		return m.viewUndoPreview()
 	case StateConfirmUndo:
 		return m.viewConfirmUndo()
+	case StateCustomTag:
+		return m.viewCustomTag()
 	default:
 		return "Unknown state"
 	}
@@ -136,11 +138,18 @@ func (m Model) viewSelectAction() string {
 			s.WriteString(m.renderKeyValue("prefix", m.prefix))
 		}
 	} else {
-		s.WriteString(infoStyle.Render("No existing tags found.") + "\n")
+		s.WriteString(m.renderKeyValue("state", infoStyle.Render("no existing tags")))
+		if m.prefix != "" {
+			s.WriteString(m.renderKeyValue("prefix", m.prefix))
+		}
 	}
 
-	// Action selection
-	s.WriteString("\n" + titleStyle.Render("Select version action") + "\n\n")
+	// Action selection title
+	title := "Select version action"
+	if m.stats == nil {
+		title = "Create your first tag"
+	}
+	s.WriteString("\n" + titleStyle.Render(title) + "\n\n")
 	s.WriteString(m.actionList.View())
 	s.WriteString("\n" + helpStyle.Render(m.keys.ListHelp()))
 

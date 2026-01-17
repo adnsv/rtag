@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io"
 	"os/exec"
+	"strings"
 	"sync"
 
 	"github.com/adnsv/go-utils/git"
@@ -11,6 +12,19 @@ import (
 	"github.com/adnsv/rtag/internal/version"
 	tea "github.com/charmbracelet/bubbletea"
 )
+
+// TagInfo represents a tag with its local/remote status
+type TagInfo struct {
+	Name     string
+	IsLocal  bool
+	IsRemote bool
+}
+
+// msgTagList is sent when tag list has been loaded
+type msgTagList struct {
+	tags []TagInfo
+	err  error
+}
 
 // loadRepoStats loads repository statistics
 func loadRepoStats() tea.Msg {
@@ -153,4 +167,73 @@ func gitStash(message string) tea.Cmd {
 		return executeGitCommand("stash")
 	}
 	return executeGitCommand("stash", "save", message)
+}
+
+// loadTagList loads the list of tags with their local/remote status
+func loadTagList() tea.Cmd {
+	return func() tea.Msg {
+		// Get local tags (sorted by date, newest first)
+		localCmd := exec.Command("git", "tag", "--sort=-creatordate")
+		localOutput, err := localCmd.Output()
+		if err != nil {
+			return msgTagList{err: fmt.Errorf("failed to get local tags: %w", err)}
+		}
+
+		localTags := make(map[string]bool)
+		for _, line := range strings.Split(strings.TrimSpace(string(localOutput)), "\n") {
+			if line != "" {
+				localTags[line] = true
+			}
+		}
+
+		// Get remote tags
+		remoteCmd := exec.Command("git", "ls-remote", "--tags", "origin")
+		remoteOutput, _ := remoteCmd.Output() // Ignore error - remote may not exist
+
+		remoteTags := make(map[string]bool)
+		for _, line := range strings.Split(string(remoteOutput), "\n") {
+			// Format: <sha>\trefs/tags/<tagname>
+			// Skip lines ending in ^{} (these are dereferenced tags)
+			if strings.Contains(line, "refs/tags/") && !strings.HasSuffix(line, "^{}") {
+				parts := strings.Split(line, "refs/tags/")
+				if len(parts) == 2 {
+					tagName := strings.TrimSpace(parts[1])
+					remoteTags[tagName] = true
+				}
+			}
+		}
+
+		// Merge into unified list
+		allTags := make(map[string]bool)
+		for tag := range localTags {
+			allTags[tag] = true
+		}
+		for tag := range remoteTags {
+			allTags[tag] = true
+		}
+
+		// Convert to sorted slice (maintain local tag order for newest first)
+		var tags []TagInfo
+		// First add local tags in order
+		for _, line := range strings.Split(strings.TrimSpace(string(localOutput)), "\n") {
+			if line != "" {
+				tags = append(tags, TagInfo{
+					Name:     line,
+					IsLocal:  true,
+					IsRemote: remoteTags[line],
+				})
+				delete(allTags, line)
+			}
+		}
+		// Then add any remote-only tags
+		for tag := range allTags {
+			tags = append(tags, TagInfo{
+				Name:     tag,
+				IsLocal:  false,
+				IsRemote: true,
+			})
+		}
+
+		return msgTagList{tags: tags}
+	}
 }

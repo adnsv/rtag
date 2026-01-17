@@ -26,10 +26,10 @@ const (
 	StateExecutingTag
 	StateConfirmPush
 	StateExecutingPush
-	StateUndo
-	StateUndoSelectScope
+	StateUndoPreview  // consolidated undo screen with tag list and scope selection
 	StateConfirmUndo
 	StateExecutingUndo
+	StateCustomTag // custom version input for first tag
 	StateDone
 	StateError
 )
@@ -37,18 +37,17 @@ const (
 // Model represents the application state
 type Model struct {
 	// Application state
-	state       AppState
-	undo        bool
-	opts        Options
-	
+	state AppState
+	opts  Options
+
 	// Repository information
-	workDir     string
-	stats       *git.Stats
-	currentTag  string
-	versions    []version.Action
-	prefix      string
-	autoPrefix  string
-	
+	workDir    string
+	stats      *git.Stats
+	currentTag string
+	versions   []version.Action
+	prefix     string
+	autoPrefix string
+
 	// UI components
 	actionList      list.Model
 	prTypeList      list.Model
@@ -61,31 +60,35 @@ type Model struct {
 	keys            KeyMap
 
 	// User selections
-	selectedAction   *version.Action
-	selectedPRType   string
-	undoScope        string // "local", "remote", "both"
-	dirtyRepoChoice  string // "commit", "stash", "proceed"
-	
+	selectedAction  *version.Action
+	selectedPRType  string
+	undoScope       string // "local", "remote", "both"
+	dirtyRepoChoice string // "commit", "stash", "proceed"
+
+	// Tag list for undo preview
+	tagList []TagInfo
+
+	// Custom tag input
+	customTagError string // validation error message
+
 	// Tag creation state
-	newTag           string
-	tagComment       string
-	tagPushed        bool
-	
+	newTag     string
+	tagComment string
+	tagPushed  bool
+
 	// Command execution
-	lastCommand      string
-	commandOutput    string
-	
+	lastCommand   string
+	commandOutput string
+
 	// Error handling
-	err              error
-	width            int
-	height           int
+	err    error
+	width  int
+	height int
 }
 
 // Options represents command-line options
 type Options struct {
-	Prefix     string
-	AllowDirty bool
-	Undo       bool
+	Prefix string
 }
 
 // Message types
@@ -119,9 +122,8 @@ func NewModel(opts Options) Model {
 		opts:    opts,
 		spinner: s,
 		keys:    DefaultKeyMap(),
-		undo:    opts.Undo,
-		width:   80,  // Default width
-		height:  24,  // Default height
+		width:   80, // Default width
+		height:  24, // Default height
 	}
 }
 

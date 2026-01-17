@@ -14,24 +14,18 @@ func main() {
 
 	app.Version("version", app_version())
 
-	app.Spec = "[--undo] [--prefix=<ver-prefix>] [--allow-dirty]"
+	app.Spec = "[--prefix=<ver-prefix>]"
 
-	undo := false
 	prefix := "AUTO"
-	allowDirty := false
 
-	app.BoolOptPtr(&undo, "u undo", false, "undo last tag locally and remotely")
 	app.StringOptPtr(&prefix, "p prefix", "AUTO", "prefix for new tags")
-	app.BoolOptPtr(&allowDirty, "d allow-dirty", false, "allow tagging of repos that contain uncommited changes")
 
 	app.Action = func() {
 		termstate := ui.ConfigureOutput(os.Stdout)
 		defer termstate.Restore()
 
 		opts := tui.Options{
-			Prefix:     prefix,
-			AllowDirty: allowDirty,
-			Undo:       undo,
+			Prefix: prefix,
 		}
 
 		err := tui.Run(opts)

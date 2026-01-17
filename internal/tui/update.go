@@ -64,6 +64,57 @@ func (m *Model) initTagConfirmList() {
 	m.confirmList.SetShowHelp(false)
 }
 
+func (m *Model) initActionList() {
+	// Create action list with version options + undo
+	items := make([]list.Item, 0, len(m.versions)+2)
+	for _, v := range m.versions {
+		items = append(items, actionItem{
+			action: v,
+			prefix: m.prefix,
+		})
+	}
+
+	// Add separator and undo option if there's a tag to delete
+	if m.stats != nil && m.stats.Description.Tag != "" {
+		items = append(items, separatorItem{})
+		items = append(items, actionItem{
+			isUndo:  true,
+			undoTag: m.stats.Description.Tag,
+		})
+	}
+
+	// Leave room for repo info header (~8 lines) and help text
+	listHeight := min(len(items)*3+4, m.height-12)
+	m.actionList = list.New(items, newItemDelegate(), m.width-4, listHeight)
+	m.actionList.SetShowTitle(false)
+	m.actionList.SetShowStatusBar(false)
+	m.actionList.SetFilteringEnabled(false)
+	m.actionList.SetShowHelp(false)
+}
+
+func (m *Model) initFirstTagActionList() {
+	// Create action list with first tag options: v0.1.0 and Custom
+	items := []list.Item{
+		actionItem{
+			action: version.Action{
+				Desc: "v0.1.0|recommended starting version",
+				Ver:  semver.Version{Major: 0, Minor: 1, Patch: 0},
+			},
+			prefix: m.prefix,
+		},
+		actionItem{
+			isCustom: true,
+		},
+	}
+
+	listHeight := min(len(items)*3+4, m.height-12)
+	m.actionList = list.New(items, newItemDelegate(), m.width-4, listHeight)
+	m.actionList.SetShowTitle(false)
+	m.actionList.SetShowStatusBar(false)
+	m.actionList.SetFilteringEnabled(false)
+	m.actionList.SetShowHelp(false)
+}
+
 // Update handles all messages and updates the model
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
@@ -119,12 +170,14 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m.updateExecuting(msg)
 	case StateError:
 		return m.updateError(msg)
-	case StateUndoSelectScope:
-		return m.updateUndoSelectScope(msg)
+	case StateUndoPreview:
+		return m.updateUndoPreview(msg)
 	case StateConfirmUndo:
 		return m.updateConfirmUndo(msg)
 	case StateExecutingUndo:
 		return m.updateExecuting(msg)
+	case StateCustomTag:
+		return m.updateCustomTag(msg)
 	case StateDone:
 		return m.updateDone(msg)
 	}
@@ -148,7 +201,7 @@ func (m Model) updateLoading(msg tea.Msg) (Model, tea.Cmd) {
 	case msgRepoStats:
 		if msg.err != nil {
 			if errors.Is(msg.err, git.ErrNoTags) {
-				// Handle first tag scenario - go directly to confirm first tag
+				// Handle first tag scenario - show action selection with first tag options
 				m.stats = nil
 				m.workDir = msg.workDir
 				m.autoPrefix = "v"
@@ -157,10 +210,9 @@ func (m Model) updateLoading(msg tea.Msg) (Model, tea.Cmd) {
 				} else {
 					m.prefix = m.opts.Prefix
 				}
-				m.newTag = m.prefix + "0.1.0"
-				m.tagComment = generateTagComment(m.newTag)
-				m.initTagConfirmList()
-				m.state = StateConfirmTag
+				// Create action list with first tag options
+				m.initFirstTagActionList()
+				m.state = StateSelectAction
 				return m, nil
 			} else {
 				m.err = fmt.Errorf("failed to obtain git stats: %w", msg.err)
@@ -195,16 +247,9 @@ func (m Model) updateLoading(msg tea.Msg) (Model, tea.Cmd) {
 		}
 
 		// Check for dirty repo first (before parsing versions)
-		if m.stats.Dirty && !m.opts.AllowDirty {
+		if m.stats.Dirty {
 			// Parse versions in background, then go to dirty choice
 			return m, parseVersions(m.stats, m.prefix)
-		}
-
-		// Check for undo mode
-		if m.undo {
-			m.initUndoScopeList()
-			m.state = StateUndoSelectScope
-			return m, nil
 		}
 
 		// Normal flow - parse versions
@@ -215,45 +260,22 @@ func (m Model) updateLoading(msg tea.Msg) (Model, tea.Cmd) {
 
 		// Now handle the transition based on current state
 		// Check if we need dirty repo choice
-		if m.stats != nil && m.stats.Dirty && !m.opts.AllowDirty {
+		if m.stats != nil && m.stats.Dirty {
 			m.initDirtyChoiceList()
 			m.state = StateDirtyRepoChoice
 			return m, nil
 		}
 
-		// Check for undo mode (already handled above, but just in case)
-		if m.undo {
-			m.initUndoScopeList()
-			m.state = StateUndoSelectScope
-			return m, nil
-		}
-
 		// Normal flow - go to action selection
 		if len(m.versions) == 0 {
-			// First tag scenario (shouldn't happen here, but handle it)
-			m.newTag = m.prefix + "0.1.0"
-			m.tagComment = generateTagComment(m.newTag)
-			m.initTagConfirmList()
-			m.state = StateConfirmTag
+			// First tag scenario
+			m.initFirstTagActionList()
+			m.state = StateSelectAction
 			return m, nil
 		}
 
-		// Create action list and go to selection
-		items := make([]list.Item, len(m.versions))
-		for i, v := range m.versions {
-			items[i] = actionItem{
-				action: v,
-				prefix: m.prefix,
-			}
-		}
-
-		// Leave room for repo info header (~8 lines) and help text
-		listHeight := min(len(items)*3+4, m.height-12)
-		m.actionList = list.New(items, newItemDelegate(), m.width-4, listHeight)
-		m.actionList.SetShowTitle(false)
-		m.actionList.SetShowStatusBar(false)
-		m.actionList.SetFilteringEnabled(false)
-		m.actionList.SetShowHelp(false)
+		// Create action list with version options + undo
+		m.initActionList()
 		m.state = StateSelectAction
 		return m, nil
 
@@ -270,37 +292,64 @@ func (m Model) updateSelectAction(msg tea.Msg) (Model, tea.Cmd) {
 	case tea.KeyMsg:
 		switch msg.String() {
 		case "enter":
-			selected, ok := m.actionList.SelectedItem().(actionItem)
-			if ok {
-				m.selectedAction = &selected.action
-				
-				if selected.action.ShowPRChoice {
-					// Need to select pre-release type
-					items := []list.Item{
-						prTypeItem{prType: "alpha", prefix: m.prefix, version: selected.action.Ver},
-						prTypeItem{prType: "beta", prefix: m.prefix, version: selected.action.Ver},
-						prTypeItem{prType: "rc", prefix: m.prefix, version: selected.action.Ver},
-						prTypeItem{prType: "release", prefix: m.prefix, version: selected.action.Ver},
-					}
-					
-					m.prTypeList = list.New(items, newItemDelegate(), m.width-4, min(len(items)*3+5, m.height-10))
-					m.prTypeList.SetShowTitle(false)
-					m.prTypeList.SetShowStatusBar(false)
-					m.prTypeList.SetFilteringEnabled(false)
-					m.prTypeList.SetShowHelp(false)
-					m.state = StateSelectPRType
-				} else {
-					// Direct to confirmation
-					m.newTag = m.prefix + selected.action.Ver.String()
-					m.tagComment = generateTagComment(m.newTag)
-					m.initTagConfirmList()
-					m.state = StateConfirmTag
-				}
+			// Check for separator item - don't allow selection
+			if _, isSep := m.actionList.SelectedItem().(separatorItem); isSep {
 				return m, nil
 			}
+
+			selected, ok := m.actionList.SelectedItem().(actionItem)
+			if !ok {
+				return m, nil
+			}
+
+			// Handle undo action
+			if selected.isUndo {
+				m.currentTag = selected.undoTag
+				m.state = StateUndoPreview
+				return m, loadTagList()
+			}
+
+			// Handle custom tag action
+			if selected.isCustom {
+				ti := textinput.New()
+				ti.Placeholder = "1.0.0"
+				ti.Focus()
+				ti.CharLimit = 50
+				ti.Width = 40
+				m.textInput = ti
+				m.customTagError = ""
+				m.state = StateCustomTag
+				return m, textinput.Blink
+			}
+
+			m.selectedAction = &selected.action
+
+			if selected.action.ShowPRChoice {
+				// Need to select pre-release type
+				items := []list.Item{
+					prTypeItem{prType: "alpha", prefix: m.prefix, version: selected.action.Ver},
+					prTypeItem{prType: "beta", prefix: m.prefix, version: selected.action.Ver},
+					prTypeItem{prType: "rc", prefix: m.prefix, version: selected.action.Ver},
+					prTypeItem{prType: "release", prefix: m.prefix, version: selected.action.Ver},
+				}
+
+				m.prTypeList = list.New(items, newItemDelegate(), m.width-4, min(len(items)*3+5, m.height-10))
+				m.prTypeList.SetShowTitle(false)
+				m.prTypeList.SetShowStatusBar(false)
+				m.prTypeList.SetFilteringEnabled(false)
+				m.prTypeList.SetShowHelp(false)
+				m.state = StateSelectPRType
+			} else {
+				// Direct to confirmation
+				m.newTag = m.prefix + selected.action.Ver.String()
+				m.tagComment = generateTagComment(m.newTag)
+				m.initTagConfirmList()
+				m.state = StateConfirmTag
+			}
+			return m, nil
 		}
 	}
-	
+
 	// Update the list
 	var cmd tea.Cmd
 	m.actionList, cmd = m.actionList.Update(msg)
@@ -476,8 +525,13 @@ func (m Model) handleBack() (Model, tea.Cmd) {
 		m.state = StateSelectAction
 	case StateConfirmTag:
 		if m.selectedAction == nil {
-			// First tag scenario - no previous screen, quit
-			return m, tea.Quit
+			// First tag or custom tag scenario - go back to action selection
+			if m.stats == nil {
+				m.initFirstTagActionList()
+			} else {
+				m.initActionList()
+			}
+			m.state = StateSelectAction
 		} else if m.selectedAction.ShowPRChoice {
 			m.state = StateSelectPRType
 		} else {
@@ -495,11 +549,21 @@ func (m Model) handleBack() (Model, tea.Cmd) {
 		return m, tea.Quit
 	case StateCommitMessage, StateStashMessage:
 		m.state = StateDirtyRepoChoice
-	case StateUndoSelectScope:
-		// No previous screen - quit
-		return m, tea.Quit
+	case StateUndoPreview:
+		// Go back to action selection
+		m.tagList = nil
+		m.initActionList()
+		m.state = StateSelectAction
 	case StateConfirmUndo:
-		m.state = StateUndoSelectScope
+		m.state = StateUndoPreview
+	case StateCustomTag:
+		// Go back to action selection
+		if m.stats == nil {
+			m.initFirstTagActionList()
+		} else {
+			m.initActionList()
+		}
+		m.state = StateSelectAction
 	}
 	return m, nil
 }
@@ -532,31 +596,12 @@ func (m Model) updateDirtyRepoChoice(msg tea.Msg) (Model, tea.Cmd) {
 					m.state = StateStashMessage
 					return m, textinput.Blink
 				case "proceed":
-					if m.undo {
-						m.initUndoScopeList()
-						m.state = StateUndoSelectScope
-						return m, nil
-					}
 					if len(m.versions) == 0 {
-						m.newTag = m.prefix + "0.1.0"
-						m.tagComment = generateTagComment(m.newTag)
-						m.initTagConfirmList()
-						m.state = StateConfirmTag
-						return m, nil
+						// First tag scenario
+						m.initFirstTagActionList()
+					} else {
+						m.initActionList()
 					}
-					items := make([]list.Item, len(m.versions))
-					for i, v := range m.versions {
-						items[i] = actionItem{
-							action: v,
-							prefix: m.prefix,
-						}
-					}
-					listHeight := min(len(items)*3+4, m.height-12)
-					m.actionList = list.New(items, newItemDelegate(), m.width-4, listHeight)
-					m.actionList.SetShowTitle(false)
-					m.actionList.SetShowStatusBar(false)
-					m.actionList.SetFilteringEnabled(false)
-					m.actionList.SetShowHelp(false)
 					m.state = StateSelectAction
 					return m, nil
 				}
@@ -646,8 +691,19 @@ func (m Model) updateExecutingGitCommand(msg tea.Msg) (Model, tea.Cmd) {
 	}
 }
 
-func (m Model) updateUndoSelectScope(msg tea.Msg) (Model, tea.Cmd) {
+func (m Model) updateUndoPreview(msg tea.Msg) (Model, tea.Cmd) {
 	switch msg := msg.(type) {
+	case msgTagList:
+		if msg.err != nil {
+			m.err = msg.err
+			m.state = StateError
+			return m, nil
+		}
+		m.tagList = msg.tags
+		// Initialize the undo scope list
+		m.initUndoScopeList()
+		return m, nil
+
 	case tea.KeyMsg:
 		switch msg.String() {
 		case "enter":
@@ -661,9 +717,61 @@ func (m Model) updateUndoSelectScope(msg tea.Msg) (Model, tea.Cmd) {
 		}
 	}
 
-	// Update the list
+	// Update spinner while loading, or update the list
+	if m.tagList == nil {
+		var cmd tea.Cmd
+		m.spinner, cmd = m.spinner.Update(msg)
+		return m, cmd
+	}
+
 	var cmd tea.Cmd
 	m.undoScopeList, cmd = m.undoScopeList.Update(msg)
+	return m, cmd
+}
+
+func (m Model) updateCustomTag(msg tea.Msg) (Model, tea.Cmd) {
+	var cmd tea.Cmd
+
+	switch msg := msg.(type) {
+	case tea.KeyMsg:
+		switch msg.Type {
+		case tea.KeyEnter:
+			// Validate the input
+			input := m.textInput.Value()
+			if input == "" {
+				m.customTagError = "Version cannot be empty"
+				return m, nil
+			}
+
+			// Parse with semver
+			_, err := semver.Parse(input)
+			if err != nil {
+				m.customTagError = fmt.Sprintf("Invalid: %s", err.Error())
+				return m, nil
+			}
+
+			// Valid - proceed to confirm
+			m.newTag = m.prefix + input
+			m.tagComment = generateTagComment(m.newTag)
+			m.initTagConfirmList()
+			m.state = StateConfirmTag
+			return m, nil
+		case tea.KeyEsc:
+			// Go back to action selection
+			if m.stats == nil {
+				// First tag scenario
+				m.initFirstTagActionList()
+			} else {
+				m.initActionList()
+			}
+			m.state = StateSelectAction
+			return m, nil
+		}
+	}
+
+	m.textInput, cmd = m.textInput.Update(msg)
+	// Clear error on any input change
+	m.customTagError = ""
 	return m, cmd
 }
 
@@ -682,13 +790,8 @@ func (m Model) updateConfirmUndo(msg tea.Msg) (Model, tea.Cmd) {
 
 			m.state = StateExecutingUndo
 
-			// Determine which tag to delete
-			tag := ""
-			if m.stats != nil && m.stats.Description.Tag != "" {
-				tag = m.stats.Description.Tag
-			}
-
-			if tag == "" {
+			// Use the tag stored in currentTag (set when undo was selected)
+			if m.currentTag == "" {
 				m.err = fmt.Errorf("no tag to delete")
 				m.state = StateError
 				return m, nil
@@ -697,17 +800,15 @@ func (m Model) updateConfirmUndo(msg tea.Msg) (Model, tea.Cmd) {
 			// Execute based on scope
 			switch m.undoScope {
 			case "local":
-				m.lastCommand = fmt.Sprintf("git tag -d %s", tag)
-				return m, gitDeleteLocalTag(tag)
+				m.lastCommand = fmt.Sprintf("git tag -d %s", m.currentTag)
+				return m, gitDeleteLocalTag(m.currentTag)
 			case "remote":
-				m.lastCommand = fmt.Sprintf("git push --delete origin %s", tag)
-				return m, gitDeleteRemoteTag(tag)
+				m.lastCommand = fmt.Sprintf("git push --delete origin %s", m.currentTag)
+				return m, gitDeleteRemoteTag(m.currentTag)
 			case "both":
 				// For both, we'll do local first
-				m.lastCommand = fmt.Sprintf("git tag -d %s", tag)
-				// Store tag for later use
-				m.currentTag = tag
-				return m, gitDeleteLocalTag(tag)
+				m.lastCommand = fmt.Sprintf("git tag -d %s", m.currentTag)
+				return m, gitDeleteLocalTag(m.currentTag)
 			}
 		}
 	}
@@ -718,12 +819,30 @@ func (m Model) updateConfirmUndo(msg tea.Msg) (Model, tea.Cmd) {
 }
 
 // List item types
+
+// separatorItem is a visual separator in the list
+type separatorItem struct{}
+
+func (i separatorItem) Title() string       { return "────────────────────────" }
+func (i separatorItem) Description() string { return "" }
+func (i separatorItem) FilterValue() string { return "" }
+
+// actionItem represents a version action in the list
 type actionItem struct {
-	action version.Action
-	prefix string
+	action   version.Action
+	prefix   string
+	isUndo   bool   // if true, this is the undo action
+	undoTag  string // tag to undo (only used if isUndo is true)
+	isCustom bool   // if true, this is the custom version option
 }
 
 func (i actionItem) Title() string {
+	if i.isUndo {
+		return "Undo last tag"
+	}
+	if i.isCustom {
+		return "Custom version"
+	}
 	desc := i.action.Desc
 	// Split by pipe to get the main description
 	if idx := strings.Index(desc, "|"); idx >= 0 {
@@ -733,6 +852,12 @@ func (i actionItem) Title() string {
 }
 
 func (i actionItem) Description() string {
+	if i.isUndo {
+		return "delete " + i.undoTag
+	}
+	if i.isCustom {
+		return "enter your own semantic version"
+	}
 	desc := i.action.Desc
 	if idx := strings.Index(desc, "|"); idx >= 0 {
 		return desc[idx+1:]
