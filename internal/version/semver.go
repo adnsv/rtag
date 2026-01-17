@@ -52,7 +52,7 @@ func CollectActions(v version.Semantic) []Action {
 		if pr == "alpha" {
 			ret = append(ret, Action{"upgrade 'alpha' to 'beta'", WithPR(v, "beta", 1), false})
 			ret = append(ret, Action{"upgrade 'alpha' to 'rc'", WithPR(v, "rc", 1), false})
-			// do not allow to go from alpha to release
+			ret = append(ret, Action{"make release", WithoutPR(v), false})
 		}
 		if pr == "beta" {
 			ret = append(ret, Action{"upgrade 'beta' to 'rc'", WithPR(v, "rc", 1), false})

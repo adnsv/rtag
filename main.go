@@ -16,12 +16,14 @@ func main() {
 
 	app.Version("version", app_version())
 
-	app.Spec = "[--undo] [--prefix=<ver-prefix>] [--allow-dirty]"
+	app.Spec = "[--undo] [--prefix=<ver-prefix>] [--allow-dirty] [--classic]"
 
 	undo := false
+	classic := false
 	opts := exec_options{}
 
 	app.BoolOptPtr(&undo, "u undo", false, "undo last tag locally and remotely")
+	app.BoolOptPtr(&classic, "classic", false, "use classic prompt-based interface")
 	opts.bind_cli(app)
 
 	app.Action = func() {
@@ -31,9 +33,17 @@ func main() {
 		var err error
 
 		if undo {
-			err = cmd_undo()
+			if classic {
+				err = cmd_undo()
+			} else {
+				err = cmdUndoTUI()
+			}
 		} else {
-			err = execute(&opts)
+			if classic {
+				err = execute(&opts)
+			} else {
+				err = executeTUI(&opts)
+			}
 		}
 
 		termstate.Restore()
