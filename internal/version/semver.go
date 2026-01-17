@@ -34,13 +34,13 @@ func CollectActions(v version.Semantic) []Action {
 
 	if len(v.Pre) == 0 {
 		if n := v; n.IncrementPatch() == nil {
-			ret = append(ret, Action{"increment patch|backwards compatible bug fixes", n, true})
+			ret = append(ret, Action{"Increment patch|backwards compatible bug fixes", n, true})
 		}
 		if n := v; n.IncrementMinor() == nil {
-			ret = append(ret, Action{"increment minor|backwards compatible new functionality", n, true})
+			ret = append(ret, Action{"Increment minor|backwards compatible new functionality", n, true})
 		}
 		if n := v; n.IncrementMajor() == nil {
-			ret = append(ret, Action{"increment major|incompatible API changes", n, true})
+			ret = append(ret, Action{"Increment major|incompatible API changes", n, true})
 		}
 	} else {
 		pr := v.Pre[0].VersionStr

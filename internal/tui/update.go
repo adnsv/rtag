@@ -66,7 +66,7 @@ func (m *Model) initTagConfirmList() {
 
 func (m *Model) initActionList() {
 	// Create action list with version options + undo
-	items := make([]list.Item, 0, len(m.versions)+2)
+	items := make([]list.Item, 0, len(m.versions)+1)
 	for _, v := range m.versions {
 		items = append(items, actionItem{
 			action: v,
@@ -74,9 +74,8 @@ func (m *Model) initActionList() {
 		})
 	}
 
-	// Add separator and undo option if there's a tag to delete
+	// Add undo option if there's a tag to delete
 	if m.stats != nil && m.stats.Description.Tag != "" {
-		items = append(items, separatorItem{})
 		items = append(items, actionItem{
 			isUndo:  true,
 			undoTag: m.stats.Description.Tag,
@@ -292,11 +291,6 @@ func (m Model) updateSelectAction(msg tea.Msg) (Model, tea.Cmd) {
 	case tea.KeyMsg:
 		switch msg.String() {
 		case "enter":
-			// Check for separator item - don't allow selection
-			if _, isSep := m.actionList.SelectedItem().(separatorItem); isSep {
-				return m, nil
-			}
-
 			selected, ok := m.actionList.SelectedItem().(actionItem)
 			if !ok {
 				return m, nil
@@ -819,13 +813,6 @@ func (m Model) updateConfirmUndo(msg tea.Msg) (Model, tea.Cmd) {
 }
 
 // List item types
-
-// separatorItem is a visual separator in the list
-type separatorItem struct{}
-
-func (i separatorItem) Title() string       { return "────────────────────────" }
-func (i separatorItem) Description() string { return "" }
-func (i separatorItem) FilterValue() string { return "" }
 
 // actionItem represents a version action in the list
 type actionItem struct {
